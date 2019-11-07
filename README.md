@@ -6,3 +6,5 @@ This repository is for any mechanical team related code/calculations to help wit
 Examples of code to upload here would be: pod run profile, kinematic analysis, structural analysis, etc.
 
 Most files will likely be Python, MATLAB, or EES but use whatever language is easiest. 
+
+For a tutorial on how to use git, see this: https://github.com/badgerloop-software/github-tutorial-template
