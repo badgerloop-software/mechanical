@@ -8,3 +8,5 @@ Examples of code to upload here would be: pod run profile, kinematic analysis, s
 Most files will likely be Python, MATLAB, or EES but use whatever language is easiest. 
 
 For a tutorial on how to use git, see this: https://github.com/badgerloop-software/github-tutorial-template
+
+***If you are a controls member and want run information, run the runRun.sh script***
