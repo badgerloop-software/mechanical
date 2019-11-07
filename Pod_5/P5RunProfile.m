@@ -12,9 +12,9 @@ close all
 
 prompt = "Enter run profile type -> Hyperloop, External_subtrack, or Open_air:";
 
-[table,percent_error,End_mode] = P5RunProfile((input(prompt,'s')))
+[table,percent_error,End_mode] = P5RunProfileFunc((input(prompt,'s')))
 
-function [T,percent_error,End_mode] = P5RunProfile(run_type)
+function [T,percent_error,End_mode] = P5RunProfileFunc(run_type)
 %% Constants
 wD = 10.45; % wheel diameter in inches
 pM =348.2/2.204; %kg - updated 11/3/19 from steamfitters trip in fall 2019
