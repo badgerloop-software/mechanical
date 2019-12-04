@@ -92,6 +92,8 @@ r=0;    %boolean for propulsion loop initialize/reset
 current_voltage(c) = 290;  %starting battery voltage
 accumulated_power = 0;
 current_capacity(c) = 8; % 8 aH
+tempK(c) = 305.15;
+tempC(c) = 30;
 
 torque=10*gear_ratio;   %torque on the wheel initialize - estimate around 10 Nm for initial torque due to scaling of MC
 force_prop = (torque/r_prop) - rolling_drag; %no need for air losses at initialization
@@ -120,7 +122,13 @@ while r==0
     Max_RPM = 24 * current_voltage(c); % 24 is slope of line of (Power/RPM), pretty linear
     mech_KE1(c) = (torque * RPM*2*pi()/60)*dt / 1000; %another energy check
     mech_KE2(c) = CurrentPower(c)*dt/1000; %power from torque and angular velocity
-
+    
+    % Temperature calcaulation
+    temperature = (tempK(c-1)) + ((current_voltage(c) * load_amps(c) * dt) / (.32 * 1.35 * 84 * 1000));
+    %0.32 = mass of one cell in kg, 1.35 is the specific heat of one cell in KJ/(K *Kg).
+    tempK(c) = temperature;
+    tempC(c) = tempK(c) - 273.15;
+    
     if (((v(c))^2/(2*(-decel)))+(primary_delay+secondary_delay)*v(c))>=(trackLength - safetyDistance - x(c)) %calculating if the pod can stop in time at the current velocity
         %Incuding primary and secondary delays because we need to stop in time for off-nominal runs
         vMax=v(c);  %max velocity to display in the results
@@ -263,6 +271,12 @@ figure(6)
 plot(t_p_time,CurrentPower,'k'); 
 xlabel('time[s]');
 ylabel('Power[W]');
+
+%temperature graph
+figure(7)
+plot(t_p_time,tempC,'k'); 
+xlabel('time[s]');
+ylabel('Temperature(c)');
 end
 
 function x = get_voltage(amps, current_capacity)
