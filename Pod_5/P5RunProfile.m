@@ -10,7 +10,7 @@ close all
 %Considering adding in braking pressure
 %Put breakpoint before plotting section to see variables from RunProfile function
 
-prompt = 'Enter run profile type -> Hyperloop, External_subtrack, or Open_air:';
+prompt = "Enter run profile type -> Hyperloop, External_subtrack, or Open_air:";
 
 [table,percent_error,End_mode] = P5RunProfileFunc((input(prompt,'s')))
 
