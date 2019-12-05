@@ -7,14 +7,14 @@ close all
 %"Hyperloop" - indicates run profile will be calculated for a full hyperloop run
 %"External_subtrack" - indicates the run profile will be calculated for an external subtrack run
 %"Open_air" - indicates the run profile will be calcuated for an open air run
-%Considering adding in braking pressure
+%Be sure the verify braking pressure is correct, variable "pressure"
 %Put breakpoint before plotting section to see variables from RunProfile function
 
 prompt = "Enter run profile type -> Hyperloop, External_subtrack, or Open_air:";
 
-[table,percent_error,End_mode] = P5RunProfileFunc((input(prompt,'s')))
+[End_mode,percent_error,table] = P5RunProfileFunc((input(prompt,'s')))
 
-function [T,percent_error,End_mode] = P5RunProfileFunc(run_type)
+function [End_mode,percent_error,T] = P5RunProfileFunc(run_type)
 %% Constants
 wD = 10.45; % wheel diameter in inches
 pM =348.2/2.204; %kg - updated 11/3/19 from steamfitters trip in fall 2019
@@ -34,6 +34,8 @@ minertia_prop = 0.05084258; %mass moment of inertia for propulsion wheel AND coa
 r_lat=convlength(1.5,'in','m');   %pod 4 wheel size convlength(radius,'unit input','unit desired')
 r_vert=convlength(1.5,'in','m'); %pod 4
 r_prop=convlength(wD/2,'in','m'); %meters
+mu_poly = .75; %static coefficent of friction of polyurethane on prop wheel
+normal_prop = 852.8; %N - normal force on prop wheel, conservative as this is static value from pod 4
 
 %% Function Logic
 if run_type == "Hyperloop"
@@ -57,10 +59,10 @@ end
 
 %% Braking deceleration calculations
 %Constants
-pressure = 250; %psig P4 MEOP = 140 psig
+pressure = 166; %psig P4 MEOP = 140 psig, 166psig easily attainable for P5 w/o buying all new actuators
 spring_losses = 2*30; % 2 actuators per side and 30 lbf per spring
 F_a=convforce(2*pi()*pressure,'lbf','N') - convforce(spring_losses,'lbf','N'); %F_a is the applied normal force put out by the actuator. pi*psi
-cof=0.3; %coefficient of friction depending on the brake pad used
+cof=.249; %coefficient of friction clean I-beam = 0.249, coefficent of friction dirty I-beam = 0.354 - determined via testing on 11/24/19
 theta = 40; %[deg] - angle made when actuated
 
 %Force balance 
@@ -97,7 +99,7 @@ tempC(c) = 30;
 
 torque=10*gear_ratio;   %torque on the wheel initialize - estimate around 10 Nm for initial torque due to scaling of MC
 force_prop = (torque/r_prop) - rolling_drag; %no need for air losses at initialization
-a(1)= force_prop/pM;%N for first time step of the propulsion phase
+a(1) = force_prop/pM;%N for first time step of the propulsion phase
 
 %% Propulsion phase loop
 while r==0
@@ -108,7 +110,14 @@ while r==0
 
     RPM = (v(c)*60)/(pi()*2*r_prop); %RPM calculated
     torque = ((1e-07*RPM^2) + (-0.0019*RPM) + 90);%torque at the motor - same as torque at the wheel
-    force_prop = (torque/r_prop) - (0.5 *CD*air_rho*Area_pod*(v(c))^2) - rolling_drag; %assume power limited, not friction limited
+    torque_graph(c) = torque; %use for plotting time vs. torque of max allowable torque to command
+    if mu_poly*normal_prop > torque/r_prop
+        force_prop = (torque/r_prop) - (0.5 *CD*air_rho*Area_pod*(v(c))^2) - rolling_drag; %assume power limited, not friction limited
+        command_torque(c) = torque; %Nm command torque to be sent to motor
+    else
+        force_prop = (mu_poly*normal_prop) - (0.5 *CD*air_rho*Area_pod*(v(c))^2) - rolling_drag; %friction limited case
+        command_torque(c) = mu_poly*normal_prop*r_prop; %Nm command torque to be sent to motor for friction limited case
+    end
     a(c) = force_prop/pM; %next acceleration value
 
     PowerLoss(c) = (17.5 + (0.0499*RPM) + (1.73E-05*RPM^2)); % internal (free run) losses in watts
@@ -220,10 +229,10 @@ header = {'Wheel_diameter_inches','Velocity_max','Velocity_max_mph','Time_propul
 T = array2table(dat,'VariableNames',header);    %converted to a table
 
 %Solve for pod KE at max speed
-KE_tot = (0.5*pM*vMax^2)/1000 + sum(PowerLoss.*.001)/1000 %total KE of pod, using equivalent mass from above in KJ
-KE_tot1 = sum(mech_KE1) %energy from "integrating" torque*omega curve from each RPM
-KE_tot2 = sum(mech_KE2)
-KE_elec = power(end) %in KJ
+KE_tot = (0.5*pM*vMax^2)/1000 + sum(PowerLoss.*.001)/1000; %total KE of pod, using equivalent mass from above in KJ
+KE_tot1 = sum(mech_KE1); %energy from "integrating" torque*omega curve from each RPM
+KE_tot2 = sum(mech_KE2);
+KE_elec = power(end); %in KJ
 percent_error = 100*abs((KE_tot2-KE_elec)/KE_tot2); %Chose the mechanical kinetic energy as the theoretical value since it has less chance for error and is better defined
 
 %% Plots
@@ -235,48 +244,65 @@ ylabel('Velocity [m/s]')
 hold on
 plot(x_secondary(plotlim:s),v_secondary(plotlim:s),'--r')
 legend('Nominal','Off-Nominal')
-
 ylim([0,90])
 hold off
+
 figure(2)
 plot(t,x,'k')   %plot displacemnt vs time
+title('Position vs. Time')
 ylabel('Distance[m]')
 xlabel('time[s]')
 hold on
 plot(t_secondary(plotlim:s),x_secondary(plotlim:s),'--r')
 legend('Nominal','Off-Nominal')
-
 hold off
+
 figure(3)
 plot(t,v,'k')   %plot velocity vs time
+title('Velocity vs. Time')
 xlabel('time[s]')
 ylabel('Velocity[m/s]')
 hold on
 plot(t_secondary(plotlim:s),v_secondary(plotlim:s),'--r')
 legend('Nominal','Off-Nominal')
-
 ylim([0,90])
 hold off
+
 figure(4)
 plot(t_p_time,current_voltage,'k'); %plot battry pack voltage vs time(till end of propulsion phase)
+title('Pack Voltage vs. Time')
 xlabel('time[s]');
 ylabel('voltage[V]');
 
 figure(5)
-plot(t_p_time,current_capacity,'k'); 
+plot(t_p_time,current_capacity,'k');
+title('Pack Capacity vs. Time') 
 xlabel('time[s]');
 ylabel('Capacity(aH)');
 
 figure(6)
-plot(t_p_time,CurrentPower,'k'); 
+plot(t_p_time,CurrentPower,'k');
+ylim([0,inf])
+title('Pack Power Output vs. Time')
 xlabel('time[s]');
 ylabel('Power[W]');
 
-%temperature graph
-figure(7)
+figure (7) %shows relationship between friction limited and power limited accelleration cases
+plot(t_p_time,command_torque,'r')
+title('Command Torque vs. Time')
+xlabel('time [s]')
+ylabel('Command Torque [Nm]')
+hold on
+plot(t_p_time,torque_graph,'b')
+legend('Applied torque-friction limited','Max available torque-non friction limited','Location','Southeast')
+hold off
+
+figure(8) %temperature graph
 plot(t_p_time,tempC,'k'); 
+title('Cell Temperature vs. Time')
 xlabel('time[s]');
 ylabel('Temperature(c)');
+
 end
 
 function x = get_voltage(amps, current_capacity)
