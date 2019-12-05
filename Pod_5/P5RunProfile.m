@@ -7,7 +7,7 @@ close all
 %"Hyperloop" - indicates run profile will be calculated for a full hyperloop run
 %"External_subtrack" - indicates the run profile will be calculated for an external subtrack run
 %"Open_air" - indicates the run profile will be calcuated for an open air run
-%Considering adding in braking pressure
+%Be sure the verify braking pressure is correct, variable "pressure"
 %Put breakpoint before plotting section to see variables from RunProfile function
 
 prompt = "Enter run profile type -> Hyperloop, External_subtrack, or Open_air:";
@@ -35,7 +35,11 @@ r_lat=convlength(1.5,'in','m');   %pod 4 wheel size convlength(radius,'unit inpu
 r_vert=convlength(1.5,'in','m'); %pod 4
 r_prop=convlength(wD/2,'in','m'); %meters
 mu_poly = .75; %static coefficent of friction of polyurethane on prop wheel
+<<<<<<< Updated upstream
 normal_prop = 852.8; %N - normal force on prop wheel, conservative as this is static value
+=======
+normal_prop = 852.8; %N - normal force on prop wheel, conservative as this is static value from pod 4
+>>>>>>> Stashed changes
 
 %% Function Logic
 if run_type == "Hyperloop"
@@ -59,10 +63,17 @@ end
 
 %% Braking deceleration calculations
 %Constants
+<<<<<<< Updated upstream
 pressure = 166; %psig P4 MEOP = 140 psig
 spring_losses = 2*30; % 2 actuators per side and 30 lbf per spring
 F_a=convforce(2*pi()*pressure,'lbf','N') - convforce(spring_losses,'lbf','N'); %F_a is the applied normal force put out by the actuator. pi*psi
 cof=0.249; %coefficient of friction clean I-beam = 0.249, coefficent of friction dirty I-beam = 0.354 - determined via testing on 11/24/19
+=======
+pressure = 166; %psig P4 MEOP = 140 psig, 166psig easily attainable for P5 w/o buying all new actuators
+spring_losses = 2*30; % 2 actuators per side and 30 lbf per spring
+F_a=convforce(2*pi()*pressure,'lbf','N') - convforce(spring_losses,'lbf','N'); %F_a is the applied normal force put out by the actuator. pi*psi
+cof=.249; %coefficient of friction clean I-beam = 0.249, coefficent of friction dirty I-beam = 0.354 - determined via testing on 11/24/19
+>>>>>>> Stashed changes
 theta = 40; %[deg] - angle made when actuated
 
 %Force balance 
@@ -241,6 +252,7 @@ hold off
 
 figure(2)
 plot(t,x,'k')   %plot displacemnt vs time
+title('Position vs. Time')
 ylabel('Distance[m]')
 xlabel('time[s]')
 hold on
@@ -250,6 +262,7 @@ hold off
 
 figure(3)
 plot(t,v,'k')   %plot velocity vs time
+title('Velocity vs. Time')
 xlabel('time[s]')
 ylabel('Velocity[m/s]')
 hold on
@@ -260,26 +273,40 @@ hold off
 
 figure(4)
 plot(t_p_time,current_voltage,'k'); %plot battry pack voltage vs time(till end of propulsion phase)
+title('Pack Voltage vs. Time')
 xlabel('time[s]');
 ylabel('voltage[V]');
 
 figure(5)
-plot(t_p_time,current_capacity,'k'); 
+plot(t_p_time,current_capacity,'k');
+title('Pack Capacity vs. Time') 
 xlabel('time[s]');
 ylabel('Capacity(aH)');
 
 figure(6)
-plot(t_p_time,CurrentPower,'k'); 
+plot(t_p_time,CurrentPower,'k');
+ylim([0,inf])
+title('Pack Power Output vs. Time')
 xlabel('time[s]');
 ylabel('Power[W]');
 
+<<<<<<< Updated upstream
 figure (7)
 plot(t_p_time,command_torque,'r')
+=======
+figure (7) %shows relationship between friction limited and power limited accelleration cases
+plot(t_p_time,command_torque,'r')
+title('Command Torque vs. Time')
+>>>>>>> Stashed changes
 xlabel('time [s]')
 ylabel('Command Torque [Nm]')
 hold on
 plot(t_p_time,torque_graph,'b')
+<<<<<<< Updated upstream
 legend('Applied torque','Max available torque','Location','Southeast')
+=======
+legend('Applied torque-friction limited','Max available torque-non friction limited','Location','Southeast')
+>>>>>>> Stashed changes
 hold off
 end
 
