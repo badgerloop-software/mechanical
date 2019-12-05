@@ -35,11 +35,7 @@ r_lat=convlength(1.5,'in','m');   %pod 4 wheel size convlength(radius,'unit inpu
 r_vert=convlength(1.5,'in','m'); %pod 4
 r_prop=convlength(wD/2,'in','m'); %meters
 mu_poly = .75; %static coefficent of friction of polyurethane on prop wheel
-<<<<<<< Updated upstream
-normal_prop = 852.8; %N - normal force on prop wheel, conservative as this is static value
-=======
 normal_prop = 852.8; %N - normal force on prop wheel, conservative as this is static value from pod 4
->>>>>>> Stashed changes
 
 %% Function Logic
 if run_type == "Hyperloop"
@@ -63,17 +59,10 @@ end
 
 %% Braking deceleration calculations
 %Constants
-<<<<<<< Updated upstream
-pressure = 166; %psig P4 MEOP = 140 psig
-spring_losses = 2*30; % 2 actuators per side and 30 lbf per spring
-F_a=convforce(2*pi()*pressure,'lbf','N') - convforce(spring_losses,'lbf','N'); %F_a is the applied normal force put out by the actuator. pi*psi
-cof=0.249; %coefficient of friction clean I-beam = 0.249, coefficent of friction dirty I-beam = 0.354 - determined via testing on 11/24/19
-=======
 pressure = 166; %psig P4 MEOP = 140 psig, 166psig easily attainable for P5 w/o buying all new actuators
 spring_losses = 2*30; % 2 actuators per side and 30 lbf per spring
 F_a=convforce(2*pi()*pressure,'lbf','N') - convforce(spring_losses,'lbf','N'); %F_a is the applied normal force put out by the actuator. pi*psi
 cof=.249; %coefficient of friction clean I-beam = 0.249, coefficent of friction dirty I-beam = 0.354 - determined via testing on 11/24/19
->>>>>>> Stashed changes
 theta = 40; %[deg] - angle made when actuated
 
 %Force balance 
@@ -105,6 +94,8 @@ r=0;    %boolean for propulsion loop initialize/reset
 current_voltage(c) = 290;  %starting battery voltage
 accumulated_power = 0;
 current_capacity(c) = 8; % 8 aH
+tempK(c) = 305.15;
+tempC(c) = 30;
 
 torque=10*gear_ratio;   %torque on the wheel initialize - estimate around 10 Nm for initial torque due to scaling of MC
 force_prop = (torque/r_prop) - rolling_drag; %no need for air losses at initialization
@@ -140,7 +131,13 @@ while r==0
     Max_RPM = 24 * current_voltage(c); % 24 is slope of line of (Power/RPM), pretty linear
     mech_KE1(c) = (torque * RPM*2*pi()/60)*dt / 1000; %another energy check
     mech_KE2(c) = CurrentPower(c)*dt/1000; %power from torque and angular velocity
-
+    
+    % Temperature calcaulation
+    temperature = (tempK(c-1)) + ((current_voltage(c) * load_amps(c) * dt) / (.32 * 1.35 * 84 * 1000));
+    %0.32 = mass of one cell in kg, 1.35 is the specific heat of one cell in KJ/(K *Kg).
+    tempK(c) = temperature;
+    tempC(c) = tempK(c) - 273.15;
+    
     if (((v(c))^2/(2*(-decel)))+(primary_delay+secondary_delay)*v(c))>=(trackLength - safetyDistance - x(c)) %calculating if the pod can stop in time at the current velocity
         %Incuding primary and secondary delays because we need to stop in time for off-nominal runs
         vMax=v(c);  %max velocity to display in the results
@@ -290,24 +287,22 @@ title('Pack Power Output vs. Time')
 xlabel('time[s]');
 ylabel('Power[W]');
 
-<<<<<<< Updated upstream
-figure (7)
-plot(t_p_time,command_torque,'r')
-=======
 figure (7) %shows relationship between friction limited and power limited accelleration cases
 plot(t_p_time,command_torque,'r')
 title('Command Torque vs. Time')
->>>>>>> Stashed changes
 xlabel('time [s]')
 ylabel('Command Torque [Nm]')
 hold on
 plot(t_p_time,torque_graph,'b')
-<<<<<<< Updated upstream
-legend('Applied torque','Max available torque','Location','Southeast')
-=======
 legend('Applied torque-friction limited','Max available torque-non friction limited','Location','Southeast')
->>>>>>> Stashed changes
 hold off
+
+figure(8) %temperature graph
+plot(t_p_time,tempC,'k'); 
+title('Cell Temperature vs. Time')
+xlabel('time[s]');
+ylabel('Temperature(c)');
+
 end
 
 function x = get_voltage(amps, current_capacity)
