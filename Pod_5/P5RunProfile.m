@@ -7,14 +7,14 @@ close all
 %"Hyperloop" - indicates run profile will be calculated for a full hyperloop run
 %"External_subtrack" - indicates the run profile will be calculated for an external subtrack run
 %"Open_air" - indicates the run profile will be calcuated for an open air run
-%Be sure the verify braking pressure is correct, variable "pressure"
+%Be sure the verify braking pressure is correct, variable "pressure" as well as any other pertanant variables
 %Put breakpoint before plotting section to see variables from RunProfile function
 
 prompt = "Enter run profile type -> Hyperloop, External_subtrack, or Open_air:";
 
-[End_mode,percent_error,table] = P5RunProfileFunc((input(prompt,'s')))
+[table] = P5RunProfileFunc((input(prompt,'s')))
 
-function [End_mode,percent_error,T] = P5RunProfileFunc(run_type)
+function [T] = P5RunProfileFunc(run_type)
 %% Constants
 wD = 10.45; % wheel diameter in inches
 pM =348.2/2.204; %kg - updated 11/3/19 from steamfitters trip in fall 2019
@@ -93,9 +93,12 @@ r=0;    %boolean for propulsion loop initialize/reset
 
 current_voltage(c) = 290;  %starting battery voltage
 accumulated_power = 0;
-current_capacity(c) = 8; % 8 aH
-tempK(c) = 305.15;
-tempC(c) = 30;
+current_capacity(c) = 8; % 8 aH is starting battery capacity
+m_cell = 0.32; %mass of 1 cell - kg
+cp_cell = 1.35; %specific heat capacity of 1 cell - kJ/kg-K
+num_cell = 84; %number of cells in HV pack
+tempK(c) = 305.15; %86F - approximate day in CA
+tempC(c) = 30; %86F - approximate day in CA
 
 torque=10*gear_ratio;   %torque on the wheel initialize - estimate around 10 Nm for initial torque due to scaling of MC
 force_prop = (torque/r_prop) - rolling_drag; %no need for air losses at initialization
@@ -113,10 +116,10 @@ while r==0
     torque_graph(c) = torque; %use for plotting time vs. torque of max allowable torque to command
     if mu_poly*normal_prop > torque/r_prop
         force_prop = (torque/r_prop) - (0.5 *CD*air_rho*Area_pod*(v(c))^2) - rolling_drag; %assume power limited, not friction limited
-        command_torque(c) = torque; %Nm command torque to be sent to motor
+        command_torque(c) = torque; %Command torque to be sent to motor - Nm
     else
         force_prop = (mu_poly*normal_prop) - (0.5 *CD*air_rho*Area_pod*(v(c))^2) - rolling_drag; %friction limited case
-        command_torque(c) = mu_poly*normal_prop*r_prop; %Nm command torque to be sent to motor for friction limited case
+        command_torque(c) = mu_poly*normal_prop*r_prop; %Command torque to be sent to motor for friction limited case - Nm
     end
     a(c) = force_prop/pM; %next acceleration value
 
@@ -130,13 +133,13 @@ while r==0
     power(c) = accumulated_power; %accumulated energy in KJ
     Max_RPM = 24 * current_voltage(c); % 24 is slope of line of (Power/RPM), pretty linear
     mech_KE1(c) = (torque * RPM*2*pi()/60)*dt / 1000; %another energy check
-    mech_KE2(c) = CurrentPower(c)*dt/1000; %power from torque and angular velocity
+    mech_KE2(c) = CurrentPower(c)*dt/1000; %energy from torque and angular velocity
     
     % Temperature calcaulation
-    temperature = (tempK(c-1)) + ((current_voltage(c) * load_amps(c) * dt) / (.32 * 1.35 * 84 * 1000));
+    temperature = (tempK(c-1)) + ((current_voltage(c) * load_amps(c) * dt) / (m_cell*cp_cell*num_cell*1000));
     %0.32 = mass of one cell in kg, 1.35 is the specific heat of one cell in KJ/(K *Kg).
-    tempK(c) = temperature;
-    tempC(c) = tempK(c) - 273.15;
+    tempK(c) = temperature; %temperature in kelvin
+    tempC(c) = tempK(c) - 273.15; %temperature in celsius
     
     if (((v(c))^2/(2*(-decel)))+(primary_delay+secondary_delay)*v(c))>=(trackLength - safetyDistance - x(c)) %calculating if the pod can stop in time at the current velocity
         %Incuding primary and secondary delays because we need to stop in time for off-nominal runs
@@ -164,12 +167,13 @@ end
 %Saving variables for use in secondary braking, plotting, or later reference
 t_p_time = t; %time step array of the propulsion phase to help make the voltage vs time plot
 t_prop=t(c);    %propulsion time
-a_store = a(c);
-s=c;
-plotlim=c;
-v_secondary=v;
-x_secondary=x;
-t_secondary=t;
+x_prop = x(c); %propulsion phase distance
+a_store = a(c); %storing last acelleration value of propulsion phase
+s=c;   %create alternate iterator for secondary braking loop
+plotlim=c; %for plotting
+v_secondary=v; %duplicate velocity vector for secondary braking
+x_secondary=x; %duplicate distance vector for secondary braking
+t_secondary=t; %duplicate time vector for secondary braking
 
 %% Braking phase loop
 %Primary Braking Case
@@ -205,29 +209,16 @@ while v_secondary(s)>=0
     end
 end
 
+%Set max values
 xMax_p = x(c);    %Distance the pod travelled by the end of the run
 tMax_p = t(c);    %total time taken
 xMax_s = x_secondary(s); %total distance travelled in secondary run
 tMax_s = t_secondary(s); %total time taken for secondary run
 
-%Checking to see which final times and distances are longest
-if xMax_s >= xMax_p
-    xMax = xMax_s;
-else
-    xMax = xMax_p;
-end
+tMax = tMax_s; %max time of run should always be secondary due to secondary delay
+xMax = xMax_s; %max distance of run should always be secondary due to secondary delay
 
-if tMax_s >= tMax_p
-    tMax = tMax_s;
-else
-    tMax = tMax_p;
-end
 %% Post process
-%Compile data to table
-dat=[wD, vMax, vMax_mph,t_prop, End_mode, tMax, xMax, a_store]; %output array
-header = {'Wheel_diameter_inches','Velocity_max','Velocity_max_mph','Time_propulsion','End_Mode','Run_Time_s', 'Distance_travelled', 'Acceleration_last'}; %Column header titles
-T = array2table(dat,'VariableNames',header);    %converted to a table
-
 %Solve for pod KE at max speed
 KE_tot = (0.5*pM*vMax^2)/1000 + sum(PowerLoss.*.001)/1000; %total KE of pod, using equivalent mass from above in KJ
 KE_tot1 = sum(mech_KE1); %energy from "integrating" torque*omega curve from each RPM
@@ -235,6 +226,10 @@ KE_tot2 = sum(mech_KE2);
 KE_elec = power(end); %in KJ
 percent_error = 100*abs((KE_tot2-KE_elec)/KE_tot2); %Chose the mechanical kinetic energy as the theoretical value since it has less chance for error and is better defined
 
+%Compile data to table
+dat=[wD, vMax, vMax_mph, t_prop, x_prop, End_mode, tMax, xMax, percent_error, a_store]; %output array
+header = {'Wheel_diameter_inches','Velocity_max','Velocity_max_mph','Time_propulsion', 'Distance_propulsion','End_Mode','Run_Time_s', 'Distance_travelled', 'Energy_percent_error', 'Acceleration_last'}; %Column header titles
+T = array2table(dat,'VariableNames',header);    %converted to a table
 %% Plots
 figure(1)
 plot(x,v,'k')   %plot displacement vs velocity
@@ -301,7 +296,7 @@ figure(8) %temperature graph
 plot(t_p_time,tempC,'k'); 
 title('Cell Temperature vs. Time')
 xlabel('time[s]');
-ylabel('Temperature(c)');
+ylabel('Temperature(C)');
 
 end
 
@@ -312,7 +307,7 @@ internal_resistance = 0.004; %ohms per cell
 % capacity Percentages from 0% to 100% incremented by 5%
 capacity_lut = [2.0 3.0 3.25 3.3 3.35 3.35 3.35 3.4 3.4 3.4 3.45 3.45 3.45 3.475 3.48 3.49 3.49 3.495 3.5 3.55 3.6]; %Updated 11/6 for a123 cells
 
-total_capacity = 8; % 6 Ah the starting capacity of the battery
+total_capacity = 8; % 8 Ah the starting capacity of the battery
 percent_charge = (current_capacity / total_capacity); % need to figure out the current capacity
 lut_idx = round(percent_charge*length(capacity_lut)); %index for capacity_lut lookup table
 
