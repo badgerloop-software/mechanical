@@ -34,7 +34,7 @@ minertia_prop = 0.05084258; %mass moment of inertia for propulsion wheel AND coa
 r_lat=convlength(1.5,'in','m');   %pod 4 wheel size convlength(radius,'unit input','unit desired')
 r_vert=convlength(1.5,'in','m'); %pod 4
 r_prop=convlength(wD/2,'in','m'); %meters
-mu_poly = .75; %static coefficent of friction of polyurethane on prop wheel
+mu_poly = .75; %static coefficent of friction of polyurethane on prop wheel - Currently set at required value for max accelleration (0.8)
 normal_prop = 852.8; %N - normal force on prop wheel, conservative as this is static value from pod 4
 
 %% Function Logic
@@ -91,7 +91,7 @@ a=0;    %acceleration array initialize/reset
 c = 1;  %step counter initialize/reset
 r=0;    %boolean for propulsion loop initialize/reset
 
-current_voltage(c) = 290;  %starting battery voltage
+current_voltage(c) = 290;  %290starting battery voltage
 accumulated_power = 0;
 current_capacity(c) = 8; % 8 aH is starting battery capacity
 m_cell = 0.32; %mass of 1 cell - kg
@@ -124,14 +124,14 @@ while r==0
     a(c) = force_prop/pM; %next acceleration value
 
     PowerLoss(c) = (17.5 + (0.0499*RPM) + (1.73E-05*RPM^2)); % internal (free run) losses in watts
-    CurrentPower(c) = ((torque * RPM*2*pi()/60) - PowerLoss(c)); % Watts - added in losses from rolling drag and air reseitance in the form of a negative torque on the wheel/motor
+    CurrentPower(c) = ((torque * RPM*2*pi()/60) - PowerLoss(c)); % Watts
     load_amps(c) = CurrentPower(c-1)/ current_voltage(c-1); % amps required for desired power
-    charge_used = load_amps(c) * (dt / 3600); %amp hrs used in single iteration
+    charge_used = load_amps(c) * (dt / 3600); %amp hrs used in single iteration - seconds to hours
     current_capacity(c) =  current_capacity(c-1) - charge_used; %subtracts charge used from current capacity
     current_voltage(c) = get_voltage(load_amps(c), current_capacity(c)); % new current voltage
-    accumulated_power = accumulated_power + ((current_voltage(c) * load_amps(c))* dt / 1000); %for each iteration, calculates power, sums up - this is actually energy in KJ
-    power(c) = accumulated_power; %accumulated energy in KJ
-    Max_RPM = 24 * current_voltage(c); % 24 is slope of line of (Power/RPM), pretty linear
+    accumulated_power = accumulated_power + ((current_voltage(c) * load_amps(c))* dt / 1000); %for each iteration, calculates power, sums up - this is actually energy in KJ for the energy check
+    power(c) = accumulated_power; %accumulated energy in KJ - for energy check
+    Max_RPM = 24 * current_voltage(c); % 24 is the conservative number from the motor datasheet for the relationship (RPM/Vdc) - assume Vdc is the same as the Vac
     mech_KE1(c) = (torque * RPM*2*pi()/60)*dt / 1000; %another energy check
     mech_KE2(c) = CurrentPower(c)*dt/1000; %energy from torque and angular velocity
     
@@ -311,6 +311,6 @@ total_capacity = 8; % 8 Ah the starting capacity of the battery
 percent_charge = (current_capacity / total_capacity); % need to figure out the current capacity
 lut_idx = round(percent_charge*length(capacity_lut)); %index for capacity_lut lookup table
 
-x = (capacity_lut(lut_idx) - (internal_resistance * amps)) * 84 ; % 84 cells at this voltage - updated 11/6 for a123 cells
+x = (capacity_lut(lut_idx) - (internal_resistance * amps)) * 84; % 84 cells at this voltage - updated 11/6 for a123 cells
 
 end
