@@ -12,18 +12,18 @@ close all
 
 prompt = "Enter run profile type -> Hyperloop, External_subtrack, or Open_air:";
 
-[table] = P5RunProfileFunc((input(prompt,'s')))
+[output_table] = P5RunProfileFunc((input(prompt,'s')))
 
 function [T] = P5RunProfileFunc(run_type)
 %% Constants
 wD = 10.45; % wheel diameter in inches
 pM =348.2/2.204; %kg - updated 11/3/19 from steamfitters trip in fall 2019
 
-secondary_delay=1;%time mesaured in seconds from when primary brakes are commanded takes into account waiting time on the microcontroller plus the time to actuate secondary
-primary_delay=0.5;%time mesaured in seconds from when primary brakes are commanded takes into account lag within the braking system itself
+secondary_delay=1;%time mesaured in seconds from when primary brakes are commanded. takes into account waiting time on the microcontroller plus the time to actuate secondary
+primary_delay=0.5;%time mesaured in seconds from when primary brakes are commanded. takes into account lag within the braking system itself
 rolling_drag=50;%N  
-CD=0.19; %pod 4 (10/14) 
-Area_pod=0.28;%m^2 pod 4 (10/14) - try and make sure this is updated
+CD=0.19; %pod 4 (10/14/19) 
+Area_pod=0.28;%m^2 pod 4 (10/14/19) - try and make sure this is updated
 gear_ratio=1;   %set to 1 as the system is now direct drive
 num_vert= 2 ; % # of vertical wheels in the stability system of the same size
 num_lat= 4 ;%# of lateral wheels of the same size
@@ -34,7 +34,7 @@ minertia_prop = 0.05084258; %mass moment of inertia for propulsion wheel AND coa
 r_lat=convlength(1.5,'in','m');   %pod 4 wheel size convlength(radius,'unit input','unit desired')
 r_vert=convlength(1.5,'in','m'); %pod 4
 r_prop=convlength(wD/2,'in','m'); %meters
-mu_poly = .75; %static coefficent of friction of polyurethane on prop wheel - Currently set at required value for max accelleration (0.8)
+mu_poly = .75; %static coefficent of friction of polyurethane on prop wheel - Required value for max accelleration = 0.8
 normal_prop = 852.8; %N - normal force on prop wheel, conservative as this is static value from pod 4
 
 %% Function Logic
@@ -80,7 +80,7 @@ G_s_decel = decel/9.806; %g force calc
 %decel = 2*-9.806; % g's of braking
 
 %% Run Calculations    
-m_rot=num_lat*(minertia_lat/r_lat^2)+num_vert*(minertia_vert/r_vert^2)+num_prop*(minertia_prop/r_prop^2);%converting over the wheel interia the an equivalent mass
+m_rot=num_lat*(minertia_lat/r_lat^2)+num_vert*(minertia_vert/r_vert^2)+num_prop*(minertia_prop/r_prop^2);%converting over the wheel interia to an equivalent mass
 pM=pM+m_rot; % pM is equivalent with wheel inertias now
 
 dt = 1e-3;  %time step size
@@ -97,8 +97,8 @@ current_capacity(c) = 8; % 8 aH is starting battery capacity
 m_cell = 0.32; %mass of 1 cell - kg
 cp_cell = 1.35; %specific heat capacity of 1 cell - kJ/kg-K
 num_cell = 84; %number of cells in HV pack
-tempK(c) = 305.15; %86F - approximate day in CA
-tempC(c) = 30; %86F - approximate day in CA
+tempK(c) = 305.15; %86F - approximate upper end of a summer day in CA
+tempC(c) = 30; %86F - approximate upper end of a summer day in CA
 
 torque=10*gear_ratio;   %torque on the wheel initialize - estimate around 10 Nm for initial torque due to scaling of MC
 force_prop = (torque/r_prop) - rolling_drag; %no need for air losses at initialization
