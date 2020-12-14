@@ -91,10 +91,12 @@ a=0;    %acceleration array initialize/reset
 c = 1;  %step counter initialize/reset
 r=0;    %boolean for propulsion loop initialize/reset
 
-current_voltage(c) = 290;  %290starting battery voltage
-accumulated_power = 0;
-current_capacity(c) = 8; % 8 aH is starting battery capacity
-m_cell = 0.32; %mass of 1 cell - kg
+voltage_no_load(c) = 300
+current_voltage(c) = 300;  %starting battery voltage
+ir_cell = 0.004 % internal resistance of a single cell
+energy_used = 0;
+pack_capacity(c) = 7.61; % 8 aH is starting battery capacity, over 95% of energy resides at <=3.3V, so only charging to 3.3V --> 7.61/8 = 95.23% of energy
+m_cell = 0.33; %mass of 1 cell - kg
 cp_cell = 1.35; %specific heat capacity of 1 cell - kJ/kg-K
 num_cell = 84; %number of cells in HV pack
 tempK(c) = 305.15; %86F - approximate upper end of a summer day in CA
@@ -106,7 +108,7 @@ a(1) = force_prop/pM;%N for first time step of the propulsion phase
 
 %% Propulsion phase loop
 while r==0
-    c = c + 1;  %loop index incriment
+    c = c + 1;  %loop index increment
     v(c) = a(c-1)*dt + v(c-1);  %forward euler to determine next velocity value
     x(c) = v(c-1)*dt + x(c-1);    %forward euler to determine next position value
     t(c) = (c-1)*dt;    %time array incriment
@@ -125,17 +127,29 @@ while r==0
 
     PowerLoss(c) = (17.5 + (0.0499*RPM) + (1.73E-05*RPM^2)); % internal (free run) losses in watts
     CurrentPower(c) = ((torque * RPM*2*pi()/60) - PowerLoss(c)); % Watts
-    load_amps(c) = CurrentPower(c-1)/ current_voltage(c-1); % amps required for desired power
-    charge_used = load_amps(c) * (dt / 3600); %amp hrs used in single iteration - seconds to hours
-    current_capacity(c) =  current_capacity(c-1) - charge_used; %subtracts charge used from current capacity
-    current_voltage(c) = get_voltage(load_amps(c), current_capacity(c)); % new current voltage
-    accumulated_power = accumulated_power + ((current_voltage(c) * load_amps(c))* dt / 1000); %for each iteration, calculates power, sums up - this is actually energy in KJ for the energy check
-    power(c) = accumulated_power; %accumulated energy in KJ - for energy check
+
+    load_amps(c) = get_current(torque)
+    voltage_no_load(c) = get_voltage_from_capacity(pack_capacity(c-1)) %voltage of pack based on charge capacity alone
+    current_voltage(c) = voltage_no_load(c) - (load_amps(c) * ir_cell * 90) %computes actual pack voltage with voltage drop from cell internal resistance of 90 cells (function of load current)
+
+    ampHours_used = load_amps(c) * (dt / 3600); %amp hrs used in single iteration - seconds to hours
+    energy_used = energy_used + ((current_voltage(c) * load_amps(c))* dt / 1000); %for each iteration, calculates power, sums up - this is actually energy in KJ for the energy check
+    pack_capacity(c) =  pack_capacity(c-1) - ampHours_used; %subtracts charge used from current capacity
+
+    
+   % voltage_no_load(c) = get_voltage_from_capacity(pack_capacity(c-1)) %voltage of pack based on charge capacity alone
+   % load_amps(c) = CurrentPower(c)/ voltage_no_load(c); % amps required for desired power 
+   % current_voltage(c) = voltage_no_load(c) - (load_amps(c) * ir_cell * 90) %computes actual pack voltage with voltage drop from cell internal resistance of 90 cells (function of load current)
+
+   % ampHours_used = load_amps(c) * (dt / 3600); %amp hrs used in single iteration - seconds to hours
+   % energy_used = energy_used + ((current_voltage(c) * load_amps(c))* dt / 1000); %for each iteration, calculates power, sums up - this is actually energy in KJ for the energy check
+   % pack_capacity(c) =  pack_capacity(c-1) - ampHours_used; %subtracts charge used from current capacity
+
     Max_RPM = 24 * current_voltage(c); % 24 is the conservative number from the motor datasheet for the relationship (RPM/Vdc) - assume Vdc is the same as the Vac
     mech_KE1(c) = (torque * RPM*2*pi()/60)*dt / 1000; %another energy check
     mech_KE2(c) = CurrentPower(c)*dt/1000; %energy from torque and angular velocity
     
-    % Temperature calcaulation
+    % Temperature calculation
     temperature = (tempK(c-1)) + ((current_voltage(c) * load_amps(c) * dt) / (m_cell*cp_cell*num_cell*1000));
     %0.32 = mass of one cell in kg, 1.35 is the specific heat of one cell in KJ/(K *Kg).
     tempK(c) = temperature; %temperature in kelvin
@@ -270,7 +284,7 @@ xlabel('time[s]');
 ylabel('voltage[V]');
 
 figure(5)
-plot(t_p_time,current_capacity,'k');
+plot(t_p_time,pack_capacity,'k');
 title('Pack Capacity vs. Time') 
 xlabel('time[s]');
 ylabel('Capacity(aH)');
@@ -300,17 +314,29 @@ ylabel('Temperature(C)');
 
 end
 
-function x = get_voltage(amps, current_capacity)
+
+function i = get_current(torque)
+%torque and irms values derived from emrax 188 datasheet
+%values in both vectors correspond via index 1:1 - must be kept in mind if more resolution wants to be added
+i_rms_lut = [10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200 210 220 230 240 250]
+torque_lut = [5 10 15 20 30 34 38 43 48 53 58 62 66 71 75 78 82 86 89 90 90 91 92 92 93]
+[m, x] = min(abs(torque_lut - torque)) %finds closest torque value index to the commanded torque
+
+i = i_rms_lut(x)
+end
+
+
+function x = get_voltage(amps, pack_capacity)
 
 internal_resistance = 0.004; %ohms per cell
 
 % capacity Percentages from 0% to 100% incremented by 5%
-capacity_lut = [2.0 3.0 3.25 3.3 3.35 3.35 3.35 3.4 3.4 3.4 3.45 3.45 3.45 3.475 3.48 3.49 3.49 3.495 3.5 3.55 3.6]; %Updated 11/6 for a123 cells
+capacity_lut = [2.2 2.65 2.9 3.03 3.05 3.07 3.08 3.10 3.12 3.15 3.15 3.17 3.18 3.20 3.20 3.20 3.20 3.20 3.25 3.30 3.6]; %Updated 12/13 for a123 cells
 
 total_capacity = 8; % 8 Ah the starting capacity of the battery
-percent_charge = (current_capacity / total_capacity); % need to figure out the current capacity
+percent_charge = (pack_capacity / total_capacity); % need to figure out the current capacity
 lut_idx = round(percent_charge*length(capacity_lut)); %index for capacity_lut lookup table
 
-x = (capacity_lut(lut_idx) - (internal_resistance * amps)) * 84; % 84 cells at this voltage - updated 11/6 for a123 cells
+x = (capacity_lut(lut_idx)) * 90; % 90 cells at this voltage - updated 12/13 for a123 cells
 
 end
