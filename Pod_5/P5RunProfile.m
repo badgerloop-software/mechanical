@@ -91,9 +91,9 @@ a=0;    %acceleration array initialize/reset
 c = 1;  %step counter initialize/reset
 r=0;    %boolean for propulsion loop initialize/reset
 
-voltage_no_load(c) = 300
+voltage_no_load(c) = 300;
 current_voltage(c) = 300;  %starting battery voltage
-ir_cell = 0.004 % internal resistance of a single cell
+ir_cell = 0.004; % internal resistance of a single cell
 energy_used = 0;
 pack_capacity(c) = 7.61; % 8 aH is starting battery capacity, over 95% of energy resides at <=3.3V, so only charging to 3.3V --> 7.61/8 = 95.23% of energy
 m_cell = 0.33; %mass of 1 cell - kg
@@ -128,12 +128,12 @@ while r==0
     PowerLoss(c) = (17.5 + (0.0499*RPM) + (1.73E-05*RPM^2)); % internal (free run) losses in watts
     CurrentPower(c) = ((torque * RPM*2*pi()/60) - PowerLoss(c)); % Watts
 
-    load_amps(c) = get_current(torque)
-    voltage_no_load(c) = get_voltage_from_capacity(pack_capacity(c-1)) %voltage of pack based on charge capacity alone
-    current_voltage(c) = voltage_no_load(c) - (load_amps(c) * ir_cell * 90) %computes actual pack voltage with voltage drop from cell internal resistance of 90 cells (function of load current)
+    load_amps(c) = get_current(torque);
+    voltage_no_load(c) = get_voltage(pack_capacity(c-1)); %voltage of pack based on charge capacity alone
+    current_voltage(c) = voltage_no_load(c) - (load_amps(c) * ir_cell * 90); %computes actual pack voltage with voltage drop from cell internal resistance of 90 cells (function of load current)
 
     ampHours_used = load_amps(c) * (dt / 3600); %amp hrs used in single iteration - seconds to hours
-    energy_used = energy_used + ((current_voltage(c) * load_amps(c))* dt / 1000); %for each iteration, calculates power, sums up - this is actually energy in KJ for the energy check
+    energy_used = energy_used + ((current_voltage(c) * load_amps(c))* dt / 1000); %kJ - for each iteration, calculates energy, sums up
     pack_capacity(c) =  pack_capacity(c-1) - ampHours_used; %subtracts charge used from current capacity
 
     
@@ -145,7 +145,7 @@ while r==0
    % energy_used = energy_used + ((current_voltage(c) * load_amps(c))* dt / 1000); %for each iteration, calculates power, sums up - this is actually energy in KJ for the energy check
    % pack_capacity(c) =  pack_capacity(c-1) - ampHours_used; %subtracts charge used from current capacity
 
-    Max_RPM = 24 * current_voltage(c); % 24 is the conservative number from the motor datasheet for the relationship (RPM/Vdc) - assume Vdc is the same as the Vac
+    Max_RPM = 22 * current_voltage(c); % 22 from the motor datasheet for the relationship (RPM/Vdc) for max load - assume Vdc is the same as the Vac
     mech_KE1(c) = (torque * RPM*2*pi()/60)*dt / 1000; %another energy check
     mech_KE2(c) = CurrentPower(c)*dt/1000; %energy from torque and angular velocity
     
@@ -237,7 +237,7 @@ xMax = xMax_s; %max distance of run should always be secondary due to secondary 
 KE_tot = (0.5*pM*vMax^2)/1000 + sum(PowerLoss.*.001)/1000; %total KE of pod, using equivalent mass from above in KJ
 KE_tot1 = sum(mech_KE1); %energy from "integrating" torque*omega curve from each RPM
 KE_tot2 = sum(mech_KE2);
-KE_elec = power(end); %in KJ
+KE_elec = energy_used(end); %in KJ
 percent_error = 100*abs((KE_tot2-KE_elec)/KE_tot2); %Chose the mechanical kinetic energy as the theoretical value since it has less chance for error and is better defined
 
 %Compile data to table
@@ -318,18 +318,16 @@ end
 function i = get_current(torque)
 %torque and irms values derived from emrax 188 datasheet
 %values in both vectors correspond via index 1:1 - must be kept in mind if more resolution wants to be added
-i_rms_lut = [10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200 210 220 230 240 250]
-torque_lut = [5 10 15 20 30 34 38 43 48 53 58 62 66 71 75 78 82 86 89 90 90 91 92 92 93]
-[m, x] = min(abs(torque_lut - torque)) %finds closest torque value index to the commanded torque
+i_rms_lut = [10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200 210 220 230 240 250];
+torque_lut = [5 10 15 20 30 34 38 43 48 53 58 62 66 71 75 78 82 86 89 90 90 91 92 92 93];
+[~, idx] = min(abs(torque_lut - torque)); %finds closest torque value index to the commanded torque
 
-i = i_rms_lut(x)
+i = i_rms_lut(idx);
 end
 
 
-function x = get_voltage(amps, pack_capacity)
-
-internal_resistance = 0.004; %ohms per cell
-
+function x = get_voltage(pack_capacity)
+%voltage determined soley based on pack capacity and cell charge level -  not accounting for internal resistance here
 % capacity Percentages from 0% to 100% incremented by 5%
 capacity_lut = [2.2 2.65 2.9 3.03 3.05 3.07 3.08 3.10 3.12 3.15 3.15 3.17 3.18 3.20 3.20 3.20 3.20 3.20 3.25 3.30 3.6]; %Updated 12/13 for a123 cells
 
@@ -337,6 +335,5 @@ total_capacity = 8; % 8 Ah the starting capacity of the battery
 percent_charge = (pack_capacity / total_capacity); % need to figure out the current capacity
 lut_idx = round(percent_charge*length(capacity_lut)); %index for capacity_lut lookup table
 
-x = (capacity_lut(lut_idx)) * 90; % 90 cells at this voltage - updated 12/13 for a123 cells
-
+x = (capacity_lut(lut_idx)) * 90; % 90 cells at this voltage - updated 12/13/20 for a123 cells
 end
