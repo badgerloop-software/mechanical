@@ -131,7 +131,8 @@ while r==0
     load_amps(c) = get_current(torque);
     voltage_no_load(c) = get_voltage(pack_capacity(c-1)); %voltage of pack based on charge capacity alone
     current_voltage(c) = voltage_no_load(c) - (load_amps(c) * ir_cell * 90); %computes actual pack voltage with voltage drop from cell internal resistance of 90 cells (function of load current)
-
+    packPower(c) = current_voltage(c) * load_amps(c);
+    
     ampHours_used = load_amps(c) * (dt / 3600); %amp hrs used in single iteration - seconds to hours
     energy_used = energy_used + ((current_voltage(c) * load_amps(c))* dt / 1000); %kJ - for each iteration, calculates energy, sums up
     pack_capacity(c) =  pack_capacity(c-1) - ampHours_used; %subtracts charge used from current capacity
@@ -150,7 +151,7 @@ while r==0
     mech_KE2(c) = CurrentPower(c)*dt/1000; %energy from torque and angular velocity
     
     % Temperature calculation
-    temperature = (tempK(c-1)) + ((current_voltage(c) * load_amps(c) * dt) / (m_cell*cp_cell*num_cell*1000));
+    temperature = (tempK(c-1)) + ((current_voltage(c) * (c) * dt) / (m_cell*cp_cell*num_cell*1000));
     %0.32 = mass of one cell in kg, 1.35 is the specific heat of one cell in KJ/(K *Kg).
     tempK(c) = temperature; %temperature in kelvin
     tempC(c) = tempK(c) - 273.15; %temperature in celsius
@@ -290,7 +291,7 @@ xlabel('time[s]');
 ylabel('Capacity(aH)');
 
 figure(6)
-plot(t_p_time,CurrentPower,'k');
+plot(t_p_time,packPower,'k');
 ylim([0,inf])
 title('Pack Power Output vs. Time')
 xlabel('time[s]');
@@ -312,13 +313,19 @@ title('Cell Temperature vs. Time')
 xlabel('time[s]');
 ylabel('Temperature(C)');
 
+figure(9) %current graph
+plot(t_p_time,load_amps,'k'); 
+title('Pack Current vs. Time')
+xlabel('time[s]');
+ylabel('Current (A)');
+
 end
 
 
 function i = get_current(torque)
 %torque and irms values derived from emrax 188 datasheet
 %values in both vectors correspond via index 1:1 - must be kept in mind if more resolution wants to be added
-i_rms_lut = [10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200 210 220 230 240 250];
+i_rms_lut = 1.52 * [10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200 210 220 230 240 250];
 torque_lut = [5 10 15 20 30 34 38 43 48 53 58 62 66 71 75 78 82 86 89 90 90 91 92 92 93];
 [~, idx] = min(abs(torque_lut - torque)); %finds closest torque value index to the commanded torque
 
