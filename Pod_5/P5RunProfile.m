@@ -16,7 +16,7 @@ prompt = "Enter run profile type -> Hyperloop, External_subtrack, or Open_air:";
 
 function [T] = P5RunProfileFunc(run_type)
 %% Constants
-wD = 9; % wheel diameter in inches
+wD = 5; % wheel diameter in inches
 pM =348.2/2.204; %kg - updated 11/3/19 from steamfitters trip in fall 2019
 
 secondary_delay=1;%time mesaured in seconds from when primary brakes are commanded. takes into account waiting time on the microcontroller plus the time to actuate secondary
@@ -24,7 +24,7 @@ primary_delay=0.5;%time mesaured in seconds from when primary brakes are command
 rolling_drag=50;%N  
 CD=0.19; %pod 4 (10/14/19) 
 Area_pod=0.28;%m^2 pod 4 (10/14/19) - try and make sure this is updated
-gear_ratio=.5;   %set to 1 as the system is now direct drive
+gear_ratio=.3;   %set to 1 as the system is now direct drive
 num_vert= 2 ; % # of vertical wheels in the stability system of the same size
 num_lat= 4 ;%# of lateral wheels of the same size
 num_prop= 1 ;% # of propulsion wheels
@@ -114,8 +114,11 @@ while r==0 %propulsion phase loop
     x(c) = v(c-1)*dt + x(c-1);    %forward euler to determine next position value
     t(c) = (c-1)*dt;    %time array incriment
     
-    RPM=(v(c)*60)/(pi()*(wD*0.0254)) ;     %RPM calculated
-    RPM_motor=RPM*gear_ratio;   %seperate parameter if gear ratio is involved
+    RPM=(v(c)*60)/(pi()*(wD*0.0254)) ;     %RPM calculated    
+    RPM_motor=RPM*gear_ratio;   %seperate parameter if gear ratio is involved    
+    if RPM_motor>=Max_RPM
+        RPM_motor=Max_RPM;
+    end
     motor_torque = ((1e-07*RPM_motor^2) + (-0.0019*RPM_motor) + 90); %((1e-07*RPM_motor^2) + (-0.0019*RPM_motor) + 90);%torque at the motor
     torque=gear_ratio*motor_torque; %takes care of the torque lost with the RPM toque
     torque_graph(c) = torque; %use for plotting time vs. torque of max allowable torque to command
@@ -128,8 +131,7 @@ while r==0 %propulsion phase loop
     end
     a(c)= force_prop/pM;    %next acceleration value
     
-    if RPM>=Max_RPM
-        RPM=Max_RPM;
+    if RPM_motor>=Max_RPM
         a(c)=0;
     end
         
