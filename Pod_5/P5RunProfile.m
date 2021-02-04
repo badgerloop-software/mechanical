@@ -121,20 +121,16 @@ while r==0 %propulsion phase loop
     end
     motor_torque = ((1e-07*RPM_motor^2) + (-0.0019*RPM_motor) + 90); %((1e-07*RPM_motor^2) + (-0.0019*RPM_motor) + 90);%torque at the motor
     torque=gear_ratio*motor_torque; %takes care of the torque lost with the RPM toque
-    torque_graph(c) = torque; %use for plotting time vs. torque of max allowable torque to command
-    if mu_poly*normal_prop > torque/r_prop
+    torque_graph(c) = motor_torque; %use for plotting time vs. torque of max allowable torque to command
+    if mu_poly*normal_prop > torque/r_prop %check friction limited vs power limited
         force_prop = (torque/r_prop) - (0.5 *CD*air_rho*Area_pod*(v(c))^2) - rolling_drag; %assume power limited, not friction limited
-        command_torque(c) = torque; %Command torque to be sent to motor - Nm
+        command_torque(c) = motor_torque; %Command torque to be sent to motor - Nm
     else
         force_prop = (mu_poly*normal_prop) - (0.5 *CD*air_rho*Area_pod*(v(c))^2) - rolling_drag; %friction limited case
-        command_torque(c) = mu_poly*normal_prop*r_prop; %Command torque to be sent to motor for friction limited case - Nm
+        command_torque(c) = mu_poly*normal_prop*r_prop/gear_ratio; %Command torque to be sent to motor for friction limited case - Nm
     end
     a(c)= force_prop/pM;    %next acceleration value
     
-    if RPM_motor>=Max_RPM
-        a(c)=0;
-    end
-        
     PowerLoss(c) = (17.5 + (0.0499*RPM) + (1.73E-05*RPM^2)); % internal (free run) losses in watts
     CurrentPower(c) = ((torque * RPM*2*pi()/60) - PowerLoss(c)); % Watts
 
@@ -147,15 +143,13 @@ while r==0 %propulsion phase loop
     pack_capacity(c) =  pack_capacity(c-1) - ampHours_used; %subtracts charge used from current capacity
     
     Max_RPM = 22 * current_voltage(c); % 22 from the motor datasheet for the relationship (RPM/Vdc) for max load - assume Vdc is the same as the Vac
-    mech_KE1(c) = (torque * RPM*2*pi()/60)*dt / 1000; %another energy check
-    mech_KE2(c) = CurrentPower(c)*dt/1000; %energy from torque and angular velocity
 
-    % Temperature calculation
-    temperature = (tempK(c-1)) + ((current_voltage(c) * load_amps(c) * dt) / (m_cell*cp_cell*num_cell*1000));
-    %0.32 = mass of one cell in kg, 1.35 is the specific heat of one cell in KJ/(K *Kg).
-    tempK(c) = temperature; %temperature in kelvin
-    tempC(c) = tempK(c) - 273.15; %temperature in celsius
-       
+    if RPM_motor>=Max_RPM
+        a(c)=0;
+    end
+    
+    %Temperature calcs - need to figure out how to do or do a test and use that data
+    
     if trackLength<=x(c) %calculating if the pod has reached end of run
         distanceMaxReached=x(c);
         vMax=v(c);  %max velocity to display in the results
@@ -218,16 +212,9 @@ tMax = tMax_s; %max time of run should always be secondary due to secondary dela
 xMax = xMax_s; %max distance of run should always be secondary due to secondary delay
 
 %% Post process
-%Solve for pod KE at max speed
-KE_tot = (0.5*pM*vMax^2)/1000 + sum(PowerLoss.*.001)/1000; %total KE of pod, using equivalent mass from above in KJ
-KE_tot1 = sum(mech_KE1); %energy from "integrating" torque*omega curve from each RPM
-KE_tot2 = sum(mech_KE2);
-KE_elec = energy_used(end); %in KJ
-percent_error = 100*abs((KE_tot2-KE_elec)/KE_tot2); %Chose the mechanical kinetic energy as the theoretical value since it has less chance for error and is better defined
-
 %Compile data to table
-dat=[wD, vMax, vMax_mph, t_prop, x_prop, End_mode, tMax, xMax, percent_error, a_store]; %output array
-header = {'Wheel_diameter_inches','Velocity_max','Velocity_max_mph','Time_propulsion', 'Distance_propulsion','End_Mode','Run_Time_s', 'Distance_travelled', 'Energy_percent_error', 'Acceleration_last'}; %Column header titles
+dat=[wD, vMax, vMax_mph, t_prop, x_prop, End_mode, tMax, xMax, a_store]; %output array
+header = {'Wheel_diameter_inches','Velocity_max','Velocity_max_mph','Time_propulsion', 'Distance_propulsion','End_Mode','Run_Time_s', 'Distance_travelled', 'Acceleration_last'}; %Column header titles
 T = array2table(dat,'VariableNames',header);    %converted to a table
 %% Plots
 figure(1)
@@ -238,7 +225,7 @@ ylabel('Velocity [m/s]')
 hold on
 plot(x_secondary(plotlim:s),v_secondary(plotlim:s),'--r')
 legend('Nominal','Off-Nominal')
-ylim([0,90])
+ylim([0,inf])
 hold off
 
 figure(2)
@@ -259,7 +246,7 @@ ylabel('Velocity[m/s]')
 hold on
 plot(t_secondary(plotlim:s),v_secondary(plotlim:s),'--r')
 legend('Nominal','Off-Nominal')
-ylim([0,90])
+ylim([0,inf])
 hold off
 
 figure(4)
@@ -298,22 +285,21 @@ xlabel('time[s]');
 ylabel('Temperature(C)');
 end
 
-
 function i = get_current(torque)
 %torque and irms values derived from emrax 188 datasheet
 %values in both vectors correspond via index 1:1 - must be kept in mind if more resolution wants to be added
-i_rms_lut = [10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200 210 220 230 240 250];
+i_rms_lut = 1.52*[10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200 210 220 230 240 250];
 torque_lut = [5 10 15 20 30 34 38 43 48 53 58 62 66 71 75 78 82 86 89 90 90 91 92 92 93];
 [~, idx] = min(abs(torque_lut - torque)); %finds closest torque value index to the commanded torque
 
 i = i_rms_lut(idx);
 end
 
-
 function x = get_voltage(pack_capacity)
 %voltage determined soley based on pack capacity and cell charge level -  not accounting for internal resistance here
 % capacity Percentages from 0% to 100% incremented by 5%
 capacity_lut = [2.2 2.65 2.9 3.03 3.05 3.07 3.08 3.10 3.12 3.15 3.15 3.17 3.18 3.20 3.20 3.20 3.20 3.20 3.25 3.30 3.6]; %Updated 12/13 for a123 cells
+%fraction from emrax datasheet "specific load speed" (22/60)*
 
 total_capacity = 8; % 8 Ah the starting capacity of the battery
 percent_charge = (pack_capacity / total_capacity); % need to figure out the current capacity
